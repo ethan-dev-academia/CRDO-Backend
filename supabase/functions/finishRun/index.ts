@@ -7,7 +7,31 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-serve(async (req) => {
+interface FinishRunRequest {
+  runId: string;
+  distance: number;
+  duration: number;
+  averageSpeed?: number;
+  peakSpeed?: number;
+}
+
+interface StreakData {
+  user_id: string;
+  current_streak: number;
+  longest_streak: number;
+  last_run_date: string;
+  freeze_count: number;
+}
+
+interface Achievement {
+  user_id: string;
+  achievement_name: string;
+  description: string;
+  points: number;
+  earned_at: string;
+}
+
+serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 204, headers: corsHeaders });
   }
@@ -37,7 +61,7 @@ serve(async (req) => {
     }
 
     // Parse request body
-    const body = await req.json();
+    const body: FinishRunRequest = await req.json();
     const { runId, distance, duration, averageSpeed, peakSpeed } = body;
 
     if (!runId || distance === undefined || duration === undefined) {
@@ -75,7 +99,7 @@ serve(async (req) => {
       .eq("user_id", user.id)
       .single();
 
-    let streakData = {
+    let streakData: StreakData = {
       user_id: user.id,
       current_streak: 1,
       longest_streak: 1,
@@ -122,7 +146,7 @@ serve(async (req) => {
     }
 
     // Check for achievements
-    const achievements = [];
+    const achievements: Achievement[] = [];
     
     // Distance-based achievements
     if (distance >= 5000) { // 5km
