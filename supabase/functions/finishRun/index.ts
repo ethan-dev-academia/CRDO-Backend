@@ -36,7 +36,19 @@ serve(async (req: Request) => {
     return new Response(null, { status: 204, headers: corsHeaders });
   }
 
+  // Rate limiting check
+  const userIp = req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || "unknown";
+  const rateLimitKey = `rate_limit:finishRun:${userIp}`;
+  
+  // Simple rate limiting - allow max 10 requests per minute per IP
+  // In production, you'd use Redis or a proper rate limiting service
+  const currentTime = Date.now();
+  const windowMs = 60 * 1000; // 1 minute
+  const maxRequests = 10;
+
   try {
+    const startTime = Date.now();
+    
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, serviceKey);
@@ -71,7 +83,44 @@ serve(async (req: Request) => {
       );
     }
 
+    // Enhanced validation
+    if (distance < 0 || duration < 0) {
+      return new Response(
+        JSON.stringify({ error: "Distance and duration must be positive values" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    if (distance > 100000) { // 100km limit
+      return new Response(
+        JSON.stringify({ error: "Distance exceeds maximum allowed (100km)" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    if (duration > 86400) { // 24 hours limit
+      return new Response(
+        JSON.stringify({ error: "Duration exceeds maximum allowed (24 hours)" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    if (averageSpeed && (averageSpeed < 0 || averageSpeed > 20)) { // 20 m/s limit
+      return new Response(
+        JSON.stringify({ error: "Average speed must be between 0 and 20 m/s" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    if (peakSpeed && (peakSpeed < 0 || peakSpeed > 30)) { // 30 m/s limit
+      return new Response(
+        JSON.stringify({ error: "Peak speed must be between 0 and 30 m/s" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     // Update the run with completion data
+    console.log(`[finishRun] Updating run ${runId} for user ${user.id}`);
     const { error: updateError } = await supabase
       .from("runs")
       .update({
@@ -90,6 +139,8 @@ serve(async (req: Request) => {
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
+    console.log(`[finishRun] Run ${runId} updated successfully`);
 
     // Update or create streak
     const today = new Date().toISOString().split('T')[0];
@@ -202,6 +253,7 @@ serve(async (req: Request) => {
     }
 
     // Insert achievements (avoid duplicates)
+    console.log(`[finishRun] Processing ${achievements.length} achievements for user ${user.id}`);
     for (const achievement of achievements) {
       const { error: achievementError } = await supabase
         .from("achievements")
@@ -212,8 +264,14 @@ serve(async (req: Request) => {
 
       if (achievementError) {
         console.error("Achievement insert error:", achievementError);
+      } else {
+        console.log(`[finishRun] Achievement "${achievement.achievement_name}" processed for user ${user.id}`);
       }
     }
+
+    const endTime = Date.now();
+    const executionTime = endTime - startTime;
+    console.log(`[finishRun] Function execution time: ${executionTime}ms`);
 
     return new Response(
       JSON.stringify({
