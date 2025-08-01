@@ -48,7 +48,7 @@ serve(async (req) => {
         .from("streaks")
         .select("*")
         .eq("user_id", user.id)
-        .single(),
+        .maybeSingle(),
       
       supabase
         .from("achievements")
@@ -61,6 +61,8 @@ serve(async (req) => {
         .select("*")
         .or(`user_id.eq.${user.id},friend_id.eq.${user.id}`)
     ]);
+
+    console.log(`[getUserStats] Streak query result for user ${user.id}:`, streak.data, streak.error);
 
     // Calculate statistics
     const totalRuns = runs.data?.length || 0;

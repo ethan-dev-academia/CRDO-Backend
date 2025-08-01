@@ -87,6 +87,16 @@ CREATE POLICY "Users can insert their own streaks" ON streaks
 CREATE POLICY "Users can update their own streaks" ON streaks
   FOR UPDATE USING (auth.uid() = user_id);
 
+-- Service role policies for streaks (for Edge Functions)
+CREATE POLICY "Service role can view streaks" ON streaks
+  FOR SELECT USING (auth.role() = 'service_role');
+
+CREATE POLICY "Service role can insert streaks" ON streaks
+  FOR INSERT WITH CHECK (auth.role() = 'service_role');
+
+CREATE POLICY "Service role can update streaks" ON streaks
+  FOR UPDATE USING (auth.role() = 'service_role');
+
 -- Achievements table policies
 CREATE POLICY "Users can view their own achievements" ON achievements
   FOR SELECT USING (auth.uid() = user_id);

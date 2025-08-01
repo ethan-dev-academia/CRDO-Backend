@@ -41,7 +41,12 @@ serve(async (req: Request) => {
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase = createClient(supabaseUrl, serviceKey);
+    const supabase = createClient(supabaseUrl, serviceKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false
+      }
+    });
 
     // Get user from auth header
     const authHeader = req.headers.get("Authorization") ?? "";
@@ -142,11 +147,19 @@ serve(async (req: Request) => {
 
     // Update or create streak
     const today = new Date().toISOString().split('T')[0];
-    const { data: existingStreak } = await supabase
+    console.log(`[finishRun] Checking streak for user ${user.id} on date ${today}`);
+    
+    const { data: existingStreak, error: streakQueryError } = await supabase
       .from("streaks")
       .select("*")
       .eq("user_id", user.id)
       .single();
+
+    if (streakQueryError) {
+      console.log(`[finishRun] No existing streak found for user ${user.id}:`, streakQueryError.message);
+    } else {
+      console.log(`[finishRun] Found existing streak for user ${user.id}:`, existingStreak);
+    }
 
     let streakData: StreakData = {
       current_streak: 1,
@@ -160,18 +173,23 @@ serve(async (req: Request) => {
       const todayDate = new Date(today);
       const daysDiff = Math.floor((todayDate.getTime() - lastRunDate.getTime()) / (1000 * 60 * 60 * 24));
 
+      console.log(`[finishRun] Days since last run: ${daysDiff}`);
+
       if (daysDiff === 1) {
         // Consecutive day
         streakData.current_streak = existingStreak.current_streak + 1;
         streakData.longest_streak = Math.max(existingStreak.longest_streak, streakData.current_streak);
+        console.log(`[finishRun] Consecutive day - new streak: ${streakData.current_streak}`);
       } else if (daysDiff === 0) {
         // Same day, keep existing streak
         streakData.current_streak = existingStreak.current_streak;
         streakData.longest_streak = existingStreak.longest_streak;
+        console.log(`[finishRun] Same day - keeping streak: ${streakData.current_streak}`);
       } else {
         // Streak broken, reset to 1
         streakData.current_streak = 1;
         streakData.longest_streak = existingStreak.longest_streak;
+        console.log(`[finishRun] Streak broken - resetting to: ${streakData.current_streak}`);
       }
 
       const { error: streakUpdateError } = await supabase
@@ -181,15 +199,20 @@ serve(async (req: Request) => {
 
       if (streakUpdateError) {
         console.error("Streak update error:", streakUpdateError);
+      } else {
+        console.log(`[finishRun] Streak updated successfully for user ${user.id}`);
       }
     } else {
       // Create new streak
+      console.log(`[finishRun] Creating new streak for user ${user.id}:`, streakData);
       const { error: streakCreateError } = await supabase
         .from("streaks")
         .insert([streakData]);
 
       if (streakCreateError) {
         console.error("Streak creation error:", streakCreateError);
+      } else {
+        console.log(`[finishRun] Streak created successfully for user ${user.id}`);
       }
     }
 
