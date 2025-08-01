@@ -54,7 +54,7 @@ serve(async (req) => {
         .from("achievements")
         .select("*")
         .eq("user_id", user.id)
-        .order("earned_at", { ascending: false }),
+        .order("created_at", { ascending: false }),
       
       supabase
         .from("friends")
@@ -72,8 +72,10 @@ serve(async (req) => {
     // Calculate total points from achievements
     const totalPoints = achievements.data?.reduce((sum, achievement) => sum + (achievement.points || 0), 0) || 0;
     
-    // Calculate total gems from achievements
-    const totalGems = achievements.data?.reduce((sum, achievement) => sum + (achievement.gems_balance || 0), 0) || 0;
+    // Calculate total gems from achievements + runs
+    const achievementGems = achievements.data?.reduce((sum, achievement) => sum + (achievement.gems_balance || 0), 0) || 0;
+    const runGems = runs.data?.reduce((sum, run) => sum + (run.gems_earned || 0), 0) || 0;
+    const totalGems = achievementGems + runGems;
 
     // Get recent runs (last 10)
     const recentRuns = runs.data?.slice(0, 10) || [];
