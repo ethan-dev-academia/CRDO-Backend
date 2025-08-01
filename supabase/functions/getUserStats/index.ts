@@ -64,13 +64,16 @@ serve(async (req) => {
 
     // Calculate statistics
     const totalRuns = runs.data?.length || 0;
-    const totalDistance = runs.data?.reduce((sum, run) => sum + (run.distance_m || 0), 0) || 0;
+    const totalDistance = runs.data?.reduce((sum, run) => sum + (run.distance_miles || 0), 0) || 0;
     const totalDuration = runs.data?.reduce((sum, run) => sum + (run.duration_s || 0), 0) || 0;
     const averageDistance = totalRuns > 0 ? totalDistance / totalRuns : 0;
     const averageDuration = totalRuns > 0 ? totalDuration / totalRuns : 0;
     
     // Calculate total points from achievements
     const totalPoints = achievements.data?.reduce((sum, achievement) => sum + (achievement.points || 0), 0) || 0;
+    
+    // Calculate total gems from achievements
+    const totalGems = achievements.data?.reduce((sum, achievement) => sum + (achievement.gems_balance || 0), 0) || 0;
 
     // Get recent runs (last 10)
     const recentRuns = runs.data?.slice(0, 10) || [];
@@ -81,7 +84,7 @@ serve(async (req) => {
     const weeklyRuns = runs.data?.filter(run => 
       new Date(run.started_at) >= oneWeekAgo
     ) || [];
-    const weeklyDistance = weeklyRuns.reduce((sum, run) => sum + (run.distance_m || 0), 0);
+    const weeklyDistance = weeklyRuns.reduce((sum, run) => sum + (run.distance_miles || 0), 0);
     const weeklyDuration = weeklyRuns.reduce((sum, run) => sum + (run.duration_s || 0), 0);
 
     // Process friends data
@@ -97,13 +100,14 @@ serve(async (req) => {
         },
         stats: {
           totalRuns,
-          totalDistance: Math.round(totalDistance),
+          totalDistance: Math.round(totalDistance * 100) / 100, // Round to 2 decimal places
           totalDuration: Math.round(totalDuration),
-          averageDistance: Math.round(averageDistance),
+          averageDistance: Math.round(averageDistance * 100) / 100,
           averageDuration: Math.round(averageDuration),
           totalPoints,
+          totalGems,
           weeklyRuns: weeklyRuns.length,
-          weeklyDistance: Math.round(weeklyDistance),
+          weeklyDistance: Math.round(weeklyDistance * 100) / 100,
           weeklyDuration: Math.round(weeklyDuration)
         },
         streak: streak.data || {
@@ -119,12 +123,19 @@ serve(async (req) => {
           sentRequests: sentRequests.length,
           total: acceptedFriends.length + pendingRequests.length + sentRequests.length
         },
-        recentRuns
+        recentRuns: recentRuns.map(run => ({
+          id: run.id,
+          distance: run.distance_miles,
+          duration: run.duration_s,
+          averageSpeed: run.average_speed_mph,
+          peakSpeed: run.peak_speed_mph,
+          gemsEarned: run.gems_earned,
+          isFlagged: run.is_flagged,
+          startedAt: run.started_at,
+          createdAt: run.created_at
+        }))
       }),
-      { 
-        status: 200, 
-        headers: { ...corsHeaders, "Content-Type": "application/json" } 
-      }
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
 
   } catch (e) {

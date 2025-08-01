@@ -6,13 +6,11 @@ A comprehensive backend for CRDO, a gamified running app where users can run, ea
 
 The app uses the following tables:
 
-- **`runs`** - Track user running sessions with distance, duration, and speed data
+- **`runs`** - Track user running sessions with distance, duration, speed data, gems earned, and cheating flags
 - **`streaks`** - Track consecutive running days and longest streaks
-- **`achievements`** - Store user achievements with points system
+- **`achievements`** - Store user achievements with points and gems balance
 - **`friends`** - Manage friend relationships and requests
 - **`crdo_backend`** - Aggregated user data and social state
-- **`wallets`** - User coin balances
-- **`daily_challenges`** - Daily running challenges
 
 ## 🚀 API Endpoints
 
@@ -45,10 +43,10 @@ Completes a running session and processes achievements and streaks.
 ```json
 {
   "runId": "uuid",
-  "distance": 5000,
+  "distance": 3.1,
   "duration": 1800,
-  "averageSpeed": 2.78,
-  "peakSpeed": 3.5
+  "averageSpeed": 6.2,
+  "peakSpeed": 8.5
 }
 ```
 
@@ -62,7 +60,7 @@ Completes a running session and processes achievements and streaks.
     "longest_streak": 10,
     "last_run_date": "2025-07-29"
   },
-  "achievements": ["5K Runner", "Week Warrior", "Speed Demon"]
+  "achievements": ["Complete a 5km run", "Week Warrior", "Speed Demon"]
 }
 ```
 
@@ -80,13 +78,14 @@ Retrieves comprehensive user statistics and progress.
   },
   "stats": {
     "totalRuns": 25,
-    "totalDistance": 125000,
+    "totalDistance": 77.5,
     "totalDuration": 90000,
-    "averageDistance": 5000,
+    "averageDistance": 3.1,
     "averageDuration": 3600,
     "totalPoints": 450,
+    "totalGems": 125,
     "weeklyRuns": 5,
-    "weeklyDistance": 25000,
+    "weeklyDistance": 15.5,
     "weeklyDuration": 18000
   },
   "streak": {
@@ -182,15 +181,71 @@ Retrieves user's friends list and pending requests.
 ### 7. Get Dashboard
 **GET** `/functions/v1/getDashboard`
 
-Retrieves dashboard data including streaks, wallet, recent runs, and daily challenges.
+Retrieves dashboard data including streaks, gems, recent runs, and achievements.
 
 **Response:**
 ```json
 {
   "streak": {...},
-  "wallet": {...},
+  "gems": {"balance": 125},
   "recentRuns": [...],
-  "todayChallenge": {...}
+  "recentAchievements": [...]
+}
+```
+
+### 8. Speed Validation
+**POST** `/functions/v1/speedValidation`
+
+Validates run data for potential cheating.
+
+**Request Body:**
+```json
+{
+  "runId": "uuid",
+  "distance": 3.1,
+  "duration": 1800,
+  "averageSpeed": 6.2,
+  "peakSpeed": 8.5
+}
+```
+
+**Response:**
+```json
+{
+  "isLegitimate": true,
+  "confidence": 85,
+  "riskLevel": "low",
+  "riskScore": 15,
+  "violations": [],
+  "warnings": [],
+  "evidence": {
+    "speedAnalysis": "Good runner speed - normal range",
+    "consistencyAnalysis": "Normal speed variation",
+    "patternAnalysis": "Stable performance"
+  },
+  "recommendations": ["Normal validation - no action required"]
+}
+```
+
+### 9. Health Check
+**GET** `/functions/v1/health`
+
+Monitors system health and database connectivity.
+
+**Response:**
+```json
+{
+  "status": "healthy",
+  "timestamp": "2025-07-29T20:00:00Z",
+  "version": "1.0.0",
+  "database": {
+    "status": "connected",
+    "responseTime": 45
+  },
+  "functions": {
+    "status": "running",
+    "count": 9
+  }
 }
 ```
 
@@ -199,15 +254,21 @@ Retrieves dashboard data including streaks, wallet, recent runs, and daily chall
 Users can earn achievements for:
 
 ### Distance-based:
-- **5K Runner** (50 points) - Complete a 5km run
-- **10K Runner** (100 points) - Complete a 10km run
+- **5K Runner** (50 points, 5 gems) - Complete a 3.1 mile run
+- **10K Runner** (100 points, 10 gems) - Complete a 6.2 mile run
 
 ### Streak-based:
-- **Week Warrior** (75 points) - Maintain a 7-day streak
-- **Monthly Master** (200 points) - Maintain a 30-day streak
+- **Week Warrior** (75 points, 7 gems) - Maintain a 7-day streak
+- **Monthly Master** (200 points, 30 gems) - Maintain a 30-day streak
 
 ### Speed-based:
-- **Speed Demon** (150 points) - Maintain an average speed of 3 m/s
+- **Speed Demon** (150 points, 15 gems) - Maintain an average speed of 10.8 mph (3 m/s)
+
+## 💎 Gems System
+
+- **Earned per run**: 1 gem per mile distance
+- **Achievement rewards**: Additional gems for completing achievements
+- **Gamification**: Gems can be used for future features
 
 ## 👥 Friends System
 
@@ -225,17 +286,26 @@ Users can connect with friends through a comprehensive social system:
 - Includes freeze count for streak protection
 - Resets streak if a day is missed
 
+## 🛡️ Anti-Cheating System
+
+- **Speed Validation**: Detects impossible speeds (>27 mph)
+- **Flagged Runs**: Marks suspicious runs for review
+- **Pattern Analysis**: Identifies suspicious performance patterns
+- **Risk Scoring**: Assigns confidence levels to run legitimacy
+
 ## 🔧 Development
 
 ### Prerequisites
 - Supabase CLI
 - Node.js (for local development)
+- Docker Desktop (for local development)
 
 ### Setup
 1. Clone the repository
 2. Install Supabase CLI
-3. Run `supabase start` to start local development
-4. Apply migrations: `supabase db reset`
+3. Start Docker Desktop
+4. Run `supabase start` to start local development
+5. Apply migrations: `supabase db reset`
 
 ### Testing Functions
 ```bash
@@ -251,8 +321,8 @@ curl -X POST http://127.0.0.1:54321/functions/v1/startRun \
 ## 📊 Data Flow
 
 1. **Start Run** → Creates run record
-2. **Finish Run** → Updates run data, processes streaks, checks achievements
-3. **Earn Points** → Points from achievements for social features
+2. **Finish Run** → Updates run data, processes streaks, checks achievements, calculates gems
+3. **Earn Points & Gems** → Points and gems from achievements for social features
 4. **Connect Friends** → Send/accept friend requests
 5. **Track Progress** → View stats, streaks, achievements, and social connections
 
@@ -262,6 +332,7 @@ curl -X POST http://127.0.0.1:54321/functions/v1/startRun \
 - Users can only access their own data
 - JWT authentication required for all endpoints
 - Service role key used for admin operations
+- Anti-cheating validation with flagged runs
 
 ## 🚀 Deployment
 

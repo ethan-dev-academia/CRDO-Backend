@@ -9,14 +9,13 @@ const corsHeaders = {
 
 interface FinishRunRequest {
   runId: string;
-  distance: number;
-  duration: number;
-  averageSpeed?: number;
-  peakSpeed?: number;
+  distance: number; // in miles
+  duration: number; // in seconds
+  averageSpeed?: number; // in mph
+  peakSpeed?: number; // in mph
 }
 
 interface StreakData {
-  user_id: string;
   current_streak: number;
   longest_streak: number;
   last_run_date: string;
@@ -25,10 +24,10 @@ interface StreakData {
 
 interface Achievement {
   user_id: string;
-  achievement_name: string;
   description: string;
   points: number;
-  earned_at: string;
+  gems_balance: number;
+  created_at: string;
 }
 
 serve(async (req: Request) => {
@@ -36,19 +35,10 @@ serve(async (req: Request) => {
     return new Response(null, { status: 204, headers: corsHeaders });
   }
 
-  // Rate limiting check
-  const userIp = req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || "unknown";
-  const rateLimitKey = `rate_limit:finishRun:${userIp}`;
-  
-  // Simple rate limiting - allow max 10 requests per minute per IP
-  // In production, you'd use Redis or a proper rate limiting service
-  const currentTime = Date.now();
-  const windowMs = 60 * 1000; // 1 minute
-  const maxRequests = 10;
-
   try {
     const startTime = Date.now();
-    
+    console.log(`[finishRun] Starting run completion process`);
+
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, serviceKey);
@@ -72,51 +62,58 @@ serve(async (req: Request) => {
       );
     }
 
-    // Parse request body
     const body: FinishRunRequest = await req.json();
     const { runId, distance, duration, averageSpeed, peakSpeed } = body;
 
-    if (!runId || distance === undefined || duration === undefined) {
+    console.log(`[finishRun] Processing run ${runId} for user ${user.id}`);
+
+    // Enhanced input validation
+    if (!distance || distance <= 0 || distance > 100) { // Max 100 miles
       return new Response(
-        JSON.stringify({ error: "Missing required fields: runId, distance, duration" }),
+        JSON.stringify({ 
+          error: "Invalid distance", 
+          details: "Distance must be between 0 and 100 miles",
+          code: "DISTANCE_VIOLATION"
+        }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // Enhanced validation
-    if (distance < 0 || duration < 0) {
+    if (!duration || duration <= 0 || duration > 86400) { // Max 24 hours
       return new Response(
-        JSON.stringify({ error: "Distance and duration must be positive values" }),
+        JSON.stringify({ 
+          error: "Invalid duration", 
+          details: "Duration must be between 0 and 86400 seconds",
+          code: "DURATION_VIOLATION"
+        }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    if (distance > 100000) { // 100km limit
+    // Calculate speed in mph
+    const calculatedSpeed = (distance / duration) * 3600; // Convert to mph
+    const minPace = 0.5; // 0.5 mph minimum
+    const maxPace = 20; // 20 mph maximum
+
+    if (calculatedSpeed < minPace && distance > 1) {
       return new Response(
-        JSON.stringify({ error: "Distance exceeds maximum allowed (100km)" }),
+        JSON.stringify({ 
+          error: "Suspicious activity detected", 
+          details: "Distance too high for reported speed. Please ensure accurate tracking.",
+          code: "PACE_VIOLATION"
+        }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    if (duration > 86400) { // 24 hours limit
-      return new Response(
-        JSON.stringify({ error: "Duration exceeds maximum allowed (24 hours)" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    if (averageSpeed && (averageSpeed < 0 || averageSpeed > 20)) { // 20 m/s limit
-      return new Response(
-        JSON.stringify({ error: "Average speed must be between 0 and 20 m/s" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    if (peakSpeed && (peakSpeed < 0 || peakSpeed > 30)) { // 30 m/s limit
-      return new Response(
-        JSON.stringify({ error: "Peak speed must be between 0 and 30 m/s" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+    // Calculate gems earned (1 gem per mile)
+    const gemsEarned = Math.floor(distance);
+    
+    // Anti-cheating: Basic speed validation (27 mph is roughly 12 m/s)
+    let isFlagged = false;
+    if (averageSpeed && averageSpeed > 27) {
+      isFlagged = true;
+      console.warn(`[finishRun] Suspicious speed detected for user ${user.id}: ${averageSpeed} mph`);
     }
 
     // Update the run with completion data
@@ -124,13 +121,14 @@ serve(async (req: Request) => {
     const { error: updateError } = await supabase
       .from("runs")
       .update({
-        distance_m: distance,
+        distance_miles: distance,
         duration_s: duration,
-        average_speed: averageSpeed || 0,
-        peak_speed: peakSpeed || 0,
+        average_speed_mph: averageSpeed || calculatedSpeed,
+        peak_speed_mph: peakSpeed || calculatedSpeed,
+        gems_earned: gemsEarned,
+        is_flagged: isFlagged
       })
-      .eq("id", runId)
-      .eq("user_id", user.id);
+      .eq("id", runId);
 
     if (updateError) {
       console.error("Run update error:", updateError);
@@ -151,7 +149,6 @@ serve(async (req: Request) => {
       .single();
 
     let streakData: StreakData = {
-      user_id: user.id,
       current_streak: 1,
       longest_streak: 1,
       last_run_date: today,
@@ -199,56 +196,56 @@ serve(async (req: Request) => {
     // Check for achievements
     const achievements: Achievement[] = [];
     
-    // Distance-based achievements
-    if (distance >= 5000) { // 5km
+    // Check for distance-based achievements
+    if (distance >= 3.1) { // 5km = 3.1 miles
       achievements.push({
         user_id: user.id,
-        achievement_name: "5K Runner",
         description: "Complete a 5km run",
         points: 50,
-        earned_at: new Date().toISOString()
+        gems_balance: 5,
+        created_at: new Date().toISOString()
       });
     }
     
-    if (distance >= 10000) { // 10km
+    if (distance >= 6.2) { // 10km = 6.2 miles
       achievements.push({
         user_id: user.id,
-        achievement_name: "10K Runner",
         description: "Complete a 10km run",
         points: 100,
-        earned_at: new Date().toISOString()
+        gems_balance: 10,
+        created_at: new Date().toISOString()
       });
     }
 
-    // Streak-based achievements
+    // Check for streak-based achievements
     if (streakData.current_streak >= 7) {
       achievements.push({
         user_id: user.id,
-        achievement_name: "Week Warrior",
         description: "Maintain a 7-day streak",
         points: 75,
-        earned_at: new Date().toISOString()
+        gems_balance: 7,
+        created_at: new Date().toISOString()
       });
     }
-
+    
     if (streakData.current_streak >= 30) {
       achievements.push({
         user_id: user.id,
-        achievement_name: "Monthly Master",
         description: "Maintain a 30-day streak",
         points: 200,
-        earned_at: new Date().toISOString()
+        gems_balance: 30,
+        created_at: new Date().toISOString()
       });
     }
 
-    // Speed-based achievements
-    if (averageSpeed >= 3.0) { // 3 m/s = ~10.8 km/h
+    // Check for speed-based achievements (10.8 mph = 3 m/s)
+    if (averageSpeed && averageSpeed >= 10.8) {
       achievements.push({
         user_id: user.id,
-        achievement_name: "Speed Demon",
         description: "Maintain an average speed of 3 m/s",
         points: 150,
-        earned_at: new Date().toISOString()
+        gems_balance: 15,
+        created_at: new Date().toISOString()
       });
     }
 
@@ -258,14 +255,14 @@ serve(async (req: Request) => {
       const { error: achievementError } = await supabase
         .from("achievements")
         .upsert([achievement], { 
-          onConflict: "user_id,achievement_name",
+          onConflict: "user_id,description",
           ignoreDuplicates: true 
         });
 
       if (achievementError) {
         console.error("Achievement insert error:", achievementError);
       } else {
-        console.log(`[finishRun] Achievement "${achievement.achievement_name}" processed for user ${user.id}`);
+        console.log(`[finishRun] Achievement "${achievement.description}" processed for user ${user.id}`);
       }
     }
 
@@ -278,7 +275,7 @@ serve(async (req: Request) => {
         message: "Run completed successfully",
         runId,
         streak: streakData,
-        achievements: achievements.map(a => a.achievement_name)
+        achievements: achievements.map(a => a.description)
       }),
       { 
         status: 200, 

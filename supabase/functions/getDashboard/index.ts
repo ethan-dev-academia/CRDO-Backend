@@ -1,5 +1,5 @@
 // supabase/functions/getDashboard/index.ts
-import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
+import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -30,9 +30,8 @@ serve(async (req) => {
 
     const today = new Date().toISOString().slice(0, 10);
 
-    const [streak, wallet, runs, challenge] = await Promise.all([
+    const [streak, runs, achievements] = await Promise.all([
       supabase.from("streaks").select("*").eq("user_id", user.id).maybeSingle(),
-      supabase.from("wallets").select("*").eq("user_id", user.id).maybeSingle(),
       supabase
         .from("runs")
         .select("*")
@@ -40,17 +39,21 @@ serve(async (req) => {
         .order("started_at", { ascending: false })
         .limit(10),
       supabase
-        .from("daily_challenges")
+        .from("achievements")
         .select("*")
-        .eq("challenge_date", today)
-        .maybeSingle(),
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(5)
     ]);
+
+    // Calculate total gems from achievements
+    const totalGems = achievements.data?.reduce((sum, achievement) => sum + (achievement.gems_balance || 0), 0) || 0;
 
     return json({
       streak: streak.data,
-      wallet: wallet.data,
+      gems: { balance: totalGems },
       recentRuns: runs.data ?? [],
-      todayChallenge: challenge.data ?? null,
+      recentAchievements: achievements.data ?? []
     });
   } catch (e) {
     console.error(e);

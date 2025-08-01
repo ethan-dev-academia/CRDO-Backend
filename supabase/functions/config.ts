@@ -18,22 +18,22 @@ export interface Config {
   };
   achievements: {
     distanceBased: Array<{
-      name: string;
       description: string;
       distance: number;
       points: number;
+      gems: number;
     }>;
     streakBased: Array<{
-      name: string;
       description: string;
       days: number;
       points: number;
+      gems: number;
     }>;
     speedBased: Array<{
-      name: string;
       description: string;
       speed: number;
       points: number;
+      gems: number;
     }>;
   };
 }
@@ -53,46 +53,46 @@ export const config: Config = {
     },
   },
   validation: {
-    maxDistance: 100000, // 100km
+    maxDistance: 100, // 100 miles
     maxDuration: 86400, // 24 hours
-    maxAverageSpeed: 20, // 20 m/s
-    maxPeakSpeed: 30, // 30 m/s
+    maxAverageSpeed: 27, // 27 mph
+    maxPeakSpeed: 33, // 33 mph
   },
   achievements: {
     distanceBased: [
       {
-        name: "5K Runner",
         description: "Complete a 5km run",
-        distance: 5000,
+        distance: 3.1, // 5km in miles
         points: 50,
+        gems: 5,
       },
       {
-        name: "10K Runner", 
         description: "Complete a 10km run",
-        distance: 10000,
+        distance: 6.2, // 10km in miles
         points: 100,
+        gems: 10,
       },
     ],
     streakBased: [
       {
-        name: "Week Warrior",
         description: "Maintain a 7-day streak",
         days: 7,
         points: 75,
+        gems: 7,
       },
       {
-        name: "Monthly Master",
         description: "Maintain a 30-day streak", 
         days: 30,
         points: 200,
+        gems: 30,
       },
     ],
     speedBased: [
       {
-        name: "Speed Demon",
         description: "Maintain an average speed of 3 m/s",
-        speed: 3.0,
+        speed: 10.8, // 3 m/s in mph
         points: 150,
+        gems: 15,
       },
     ],
   },
