@@ -15,7 +15,82 @@ The app uses the following tables:
 ## 🚀 API Endpoints
 
 ### Authentication
-All endpoints require a valid JWT token in the Authorization header:
+
+#### Sign Up
+**POST** `/functions/v1/signup`
+
+Creates a new user account.
+
+**Request Body:**
+```json
+{
+  "email": "user@example.com",
+  "password": "password123"
+}
+```
+
+**Response:**
+```json
+{
+  "message": "User account created successfully",
+  "user": {
+    "id": "uuid",
+    "email": "user@example.com"
+  },
+  "session": {
+    "access_token": "jwt-token",
+    "refresh_token": "refresh-token"
+  }
+}
+```
+
+#### Login
+**POST** `/functions/v1/login`
+
+Authenticates a user and returns a session.
+
+**Request Body:**
+```json
+{
+  "email": "user@example.com",
+  "password": "password123"
+}
+```
+
+**Response:**
+```json
+{
+  "message": "Login successful",
+  "user": {
+    "id": "uuid",
+    "email": "user@example.com"
+  },
+  "session": {
+    "access_token": "jwt-token",
+    "refresh_token": "refresh-token"
+  }
+}
+```
+
+#### Logout
+**POST** `/functions/v1/logout`
+
+Signs out the user and invalidates the session.
+
+**Headers:**
+```
+Authorization: Bearer <your-jwt-token>
+```
+
+**Response:**
+```json
+{
+  "message": "Logout successful"
+}
+```
+
+### Protected Endpoints
+All other endpoints require a valid JWT token in the Authorization header:
 ```
 Authorization: Bearer <your-jwt-token>
 ```
