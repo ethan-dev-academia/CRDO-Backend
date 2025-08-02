@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 // 🧠 Function to insert a fake run for testing purposes
+// This is a test utility function for seeding test data, not part of the main running flow
 serve(async (req) => {
   console.log("🔥 Function start");
 
@@ -74,7 +75,7 @@ serve(async (req) => {
 
       console.log("✅ Inserted successfully");
       return new Response(
-        JSON.stringify({ message: "Run saved successfully.", user_id: testUser.id }),
+        JSON.stringify({ message: "Test run seeded successfully.", user_id: testUser.id }),
         {
           status: 200,
           headers: { "Content-Type": "application/json" },
@@ -108,7 +109,7 @@ serve(async (req) => {
 
     console.log("✅ Inserted successfully");
     return new Response(
-      JSON.stringify({ message: "Run saved successfully.", user_id: userData.user.id }),
+      JSON.stringify({ message: "Test run seeded successfully.", user_id: userData.user.id }),
       {
         status: 200,
         headers: { "Content-Type": "application/json" },
